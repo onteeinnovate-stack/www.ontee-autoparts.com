@@ -1,6 +1,7 @@
 // Cloudflare Pages Function. Configure RESEND_API_KEY and RFQ_FROM_EMAIL in Pages secrets.
 const json=(obj,status=200)=>new Response(JSON.stringify(obj),{status,headers:{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store','X-Content-Type-Options':'nosniff'}});
 const clean=(v,max=200)=>typeof v==='string'?v.trim().slice(0,max):'';
+export function onRequestGet(){return json({ok:true,service:'ontee-rfq',method:'POST required',version:'diagnostic-1'});}
 export async function onRequestPost({request,env}){
   if(!env.RESEND_API_KEY||!env.RFQ_FROM_EMAIL)return json({error:'Email service not configured yet.'},503);
   const origin=request.headers.get('Origin');const host=new URL(request.url).host;
