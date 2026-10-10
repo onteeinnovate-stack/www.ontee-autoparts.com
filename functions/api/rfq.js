@@ -7,7 +7,7 @@ export async function onRequestPost(context){
   catch (error) { console.error('RFQ handler exception', error?.name || 'Error'); return json({error:'RFQ server error. Please use email fallback.',code:'RFQ_HANDLER_ERROR'},500); }
 }
 async function processRfq({request,env}){
-  if(!env.RESEND_API_KEY||!env.RFQ_FROM_EMAIL)return json({error:'Email service not configured yet.'},503);
+  if(!env.RESEND_API_KEY||!env.RFQ_FROM_EMAIL){console.error('RFQ config missing',!env.RESEND_API_KEY?'RESEND_API_KEY':'',!env.RFQ_FROM_EMAIL?'RFQ_FROM_EMAIL':'');return json({error:'Email service is not configured. Please use email fallback.',code:'RFQ_CONFIG_MISSING'},503);}
   const origin=request.headers.get('Origin');const host=new URL(request.url).host;
   if(origin){try{if(new URL(origin).host!==host)return json({error:'Invalid request origin.'},403)}catch{return json({error:'Invalid origin.'},403)}}
   if(Number(request.headers.get('Content-Length')||0)>12000)return json({error:'Request too large.'},413);
@@ -19,7 +19,7 @@ async function processRfq({request,env}){
   if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(fields.email))return json({error:'Invalid email address.'},400);
   const id='ONTEE-'+new Date().toISOString().slice(0,10).replace(/-/g,'')+'-'+(typeof crypto!=='undefined' && typeof crypto.randomUUID==='function'?crypto.randomUUID().slice(0,8).toUpperCase():Math.random().toString(36).slice(2,10).toUpperCase());
   const text=['New Ontee website RFQ','Reference: '+id,...Object.entries(fields).map(([k,v])=>k.toUpperCase()+': '+v)].join('\n\n');
-  let reply;try{reply=await fetch('https://api.resend.com/emails',{method:'POST',headers:{'Authorization':'Bearer '+env.RESEND_API_KEY,'Content-Type':'application/json'},body:JSON.stringify({from:env.RFQ_FROM_EMAIL,to:['onteeinnovate@gmail.com'],reply_to:fields.email,subject:'Ontee Website RFQ '+id+' — '+fields.part,text})})}catch{return json({error:'Mail provider unavailable; please use email fallback.'},502)}
-  if(!reply.ok){console.error('Resend error',reply.status);return json({error:'Email delivery not available. Please use email fallback.'},502)}
+  let reply;try{reply=await fetch('https://api.resend.com/emails',{method:'POST',headers:{'Authorization':'Bearer '+env.RESEND_API_KEY,'Content-Type':'application/json'},body:JSON.stringify({from:env.RFQ_FROM_EMAIL,to:['onteeinnovate@gmail.com'],reply_to:fields.email,subject:'Ontee Website RFQ '+id+' — '+fields.part,text})})}catch(error){console.error('Resend connection failure',error?.name||'Error');return json({error:'Mail provider unavailable; please use email fallback.',code:'RFQ_PROVIDER_UNREACHABLE'},502)}
+  if(!reply.ok){let providerCode='UNKNOWN';try{const providerError=await reply.json();providerCode=String(providerError?.name||providerError?.code||'UNKNOWN').slice(0,80)}catch{}console.error('Resend rejected RFQ',reply.status,providerCode);return json({error:'Email delivery not available. Please use email fallback.',code:'RFQ_PROVIDER_REJECTED'},502)}
   return json({ok:true,reference:id});
 }
